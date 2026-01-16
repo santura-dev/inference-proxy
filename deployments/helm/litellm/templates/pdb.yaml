@@ -1,0 +1,15 @@
+{{- if and .Values.proxy.enabled .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "litellm.proxy.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "litellm.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "litellm.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: proxy
+{{- end }}

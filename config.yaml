@@ -1,0 +1,151 @@
+## LiteLLM Configuration - Model Catalogue
+## Supports vLLM and SGLang model servers
+
+model_list:
+  ## Audio Models (TTS / Speech)
+  - model_name: nvidia-parakeet-tdt-0_6b-v3
+    litellm_params:
+      model: nvidia/parakeet-tdt-0.6b-v3
+      api_base: http://vllm-audio:8000/v1
+    model_info:
+      mode: audio_speech
+      description: NVIDIA Parakeet TTS 0.6B v3 - Audio-centric processing
+      owner: ml-platform
+      capabilities: ["tts", "audio", "speech-synthesis"]
+      priority: 1
+      tags: ["audio", "nvidia", "tts"]
+
+  - model_name: nvidia-parakeet-tdt-0_6b-v2
+    litellm_params:
+      model: nvidia/parakeet-tdt-0.6b-v2
+      api_base: http://vllm-audio:8000/v1
+    model_info:
+      mode: audio_speech
+      description: NVIDIA Parakeet TTS 0.6B v2 - Earlier generation
+      owner: ml-platform
+      capabilities: ["tts", "audio", "speech-synthesis"]
+      priority: 2
+      tags: ["audio", "nvidia", "tts"]
+
+  ## LLM Models
+  - model_name: mistral-large-3-675b
+    litellm_params:
+      model: mistralai/mistral-large-3-675b-instruct-2512-nvfp4
+      api_base: http://sglang-llm:30000/v1
+    model_info:
+      mode: chat
+      description: Mistral Large 3 - 675B parameters, NVFP4 precision
+      owner: engineering
+      capabilities: ["chat", "text", "images", "tools", "json"]
+      priority: 1
+      tags: ["llm", "mistral", "reasoning", "nvfp4"]
+
+  - model_name: qwen3-30b-a3b
+    litellm_params:
+      model: qwen/Qwen3-30B-A3B-Instruct-2507
+      api_base: http://vllm-llm:8000/v1
+    model_info:
+      mode: chat
+      description: Qwen 3 30B A3B - 262K context, bfloat16
+      owner: engineering
+      capabilities: ["chat", "text", "instruction-following"]
+      priority: 2
+      tags: ["llm", "qwen", "fast"]
+
+  - model_name: openai-gpt-oss-120b
+    litellm_params:
+      model: openai/gpt-oss-120b
+      api_base: http://sglang-llm:30000/v1
+    model_info:
+      mode: chat
+      description: Open-source GPT-style model - 120B parameters
+      owner: engineering
+      capabilities: ["chat", "text", "tools"]
+      priority: 3
+      tags: ["llm", "openai-style", "general-purpose"]
+
+  - model_name: qwen3-vl-235b
+    litellm_params:
+      model: Qwen/Qwen3-VL-235B-A22B-Thinking
+      api_base: http://vllm-vision:8000/v1
+    model_info:
+      mode: vision
+      description: Qwen 3 Vision - 235B parameters, multimodal
+      owner: vision-team
+      capabilities: ["chat", "text", "images", "tools", "vision"]
+      priority: 1
+      tags: ["llm", "qwen", "vision", "multimodal"]
+
+  - model_name: meta-llama-4-maverick
+    litellm_params:
+      model: meta-llama/llama-4-maverick-17b-128e-instruct
+      api_base: http://sglang-llm:30000/v1
+    model_info:
+      mode: chat
+      description: Meta Llama 4 Maverick - Enhanced instruction following
+      owner: engineering
+      capabilities: ["chat", "text", "images", "tools", "multimodal"]
+      priority: 2
+      tags: ["llm", "meta", "instruction-tuned"]
+
+  ## Embedding Models
+  - model_name: baai-bge-m3
+    litellm_params:
+      model: baai/bge-m3
+      api_base: http://sglang-embed:30000/v1
+    model_info:
+      mode: embeddings
+      description: BGE M3 - 567M parameters, 8K context
+      owner: search-team
+      capabilities: ["embeddings", "text-embedding"]
+      priority: 1
+      tags: ["embedding", "baai", "search"]
+
+  - model_name: sentence-transformers-minilm-l6
+    litellm_params:
+      model: sentence-transformers/all-MiniLM-L6-v2
+      api_base: http://vllm-embed:8000/v1
+    model_info:
+      mode: embeddings
+      description: All-MiniLM-L6-v2 - 22M parameters, semantic embeddings
+      owner: search-team
+      capabilities: ["embeddings", "semantic", "clustering"]
+      priority: 2
+      tags: ["embedding", "sentence-transformers", "fast"]
+
+  - model_name: intfloat-multilingual-e5-large
+    litellm_params:
+      model: intfloat/multilingual-e5-large-instruct
+      api_base: http://vllm-embed:8000/v1
+    model_info:
+      mode: embeddings
+      description: Multilingual E5 Large - Instruction-friendly embeddings
+      owner: documents
+      capabilities: ["embeddings", "multilingual", "instructions"]
+      priority: 3
+      tags: ["embedding", "multilingual", "intfloat"]
+
+  ## OCR / Vision Models
+  - model_name: deepseek-ocr
+    litellm_params:
+      model: deepseek/deepseek-ocr
+      api_base: http://vllm-vision:8000/v1
+    model_info:
+      mode: vision
+      description: DeepSeek OCR - 3B parameters for text/image extraction
+      owner: documents
+      capabilities: ["ocr", "vision", "text-extraction", "image-processing"]
+      priority: 1
+      tags: ["ocr", "deepseek", "document"]
+
+## General Settings
+general_settings:
+  master_key: os.environ.LITELLM_MASTER_KEY
+  stream_timeout: 30
+  max_retries: 3
+  retry_on_failure: true
+
+## LiteLLM Settings
+litellm_settings:
+  cache_type: redis
+  cache_expiry_seconds: 300

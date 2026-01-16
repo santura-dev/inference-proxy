@@ -1,0 +1,263 @@
+# Open Model Ecosystem - InferenceService Definitions
+# These bind BaseModels to ServingRuntimes and expose endpoints
+
+---
+# Audio TTS Services
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: nvidia-parakeet-tdt-0-6b-v3
+  labels:
+    owner: ml-platform
+    category: audio
+spec:
+  baseModel: nvidia-parakeet-tdt-0-6b-v3
+  runtime: vllm-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "32Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "16Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: nvidia-parakeet-tdt-0-6b-v2
+  labels:
+    owner: ml-platform
+    category: audio
+spec:
+  baseModel: nvidia-parakeet-tdt-0-6b-v2
+  runtime: vllm-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 70
+
+---
+# LLM Services
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: mistral-large-3-675b
+  labels:
+    owner: engineering
+    category: llm
+spec:
+  baseModel: mistral-large-3-675b
+  runtime: sglang-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 60
+  resources:
+    limits:
+      nvidia.com/gpu: 4
+      memory: "256Gi"
+    requests:
+      nvidia.com/gpu: 4
+      memory: "128Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: qwen3-30b-a3b
+  labels:
+    owner: engineering
+    category: llm
+spec:
+  baseModel: qwen3-30b-a3b
+  runtime: vllm-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 2
+      memory: "128Gi"
+    requests:
+      nvidia.com/gpu: 2
+      memory: "64Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: openai-gpt-oss-120b
+  labels:
+    owner: engineering
+    category: llm
+spec:
+  baseModel: openai-gpt-oss-120b
+  runtime: sglang-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 60
+  resources:
+    limits:
+      nvidia.com/gpu: 4
+      memory: "256Gi"
+    requests:
+      nvidia.com/gpu: 4
+      memory: "128Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: qwen3-vl-235b
+  labels:
+    owner: vision-team
+    category: vision
+spec:
+  baseModel: qwen3-vl-235b
+  runtime: vllm-vision-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 2
+      memory: "128Gi"
+    requests:
+      nvidia.com/gpu: 2
+      memory: "64Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: meta-llama-4-maverick
+  labels:
+    owner: engineering
+    category: llm
+spec:
+  baseModel: meta-llama-4-maverick
+  runtime: vllm-vision-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 60
+  resources:
+    limits:
+      nvidia.com/gpu: 2
+      memory: "128Gi"
+    requests:
+      nvidia.com/gpu: 2
+      memory: "64Gi"
+
+---
+# Embedding Services
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: baai-bge-m3
+  labels:
+    owner: search-team
+    category: embedding
+spec:
+  baseModel: baai-bge-m3
+  runtime: vllm-runtime
+  replicas: 2
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "32Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "16Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: sentence-transformers-minilm-l6
+  labels:
+    owner: search-team
+    category: embedding
+spec:
+  baseModel: sentence-transformers-minilm-l6
+  runtime: vllm-runtime
+  replicas: 2
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "16Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "8Gi"
+
+---
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: intfloat-multilingual-e5-large
+  labels:
+    owner: documents
+    category: embedding
+spec:
+  baseModel: intfloat-multilingual-e5-large
+  runtime: vllm-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "32Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "16Gi"
+
+---
+# OCR Service
+apiVersion: omeloop.io/v1alpha1
+kind: InferenceService
+metadata:
+  name: deepseek-ocr
+  labels:
+    owner: documents
+    category: ocr
+spec:
+  baseModel: deepseek-ocr
+  runtime: vllm-vision-runtime
+  replicas: 1
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+  resources:
+    limits:
+      nvidia.com/gpu: 1
+      memory: "32Gi"
+    requests:
+      nvidia.com/gpu: 1
+      memory: "16Gi"

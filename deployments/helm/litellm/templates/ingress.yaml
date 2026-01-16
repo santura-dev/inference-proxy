@@ -1,0 +1,28 @@
+{{- if and .Values.proxy.enabled .Values.proxy.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "litellm.proxy.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "litellm.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.proxy.ingress.annotations | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.proxy.ingress.className }}
+  {{- if .Values.proxy.ingress.tls }}
+  tls:
+    {{- toYaml .Values.proxy.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: litellm-api.{{ .Values.global.domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: litellm-proxy
+                port:
+                  number: {{ .Values.proxy.service.port }}
+{{- end }}

@@ -1,0 +1,73 @@
+# SGLang Embedding Server - BGE M3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sglang-embed
+  namespace: litellm
+  labels:
+    app: sglang-embed
+    runtime: sglang
+    owner: search-team
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sglang-embed
+  template:
+    metadata:
+      labels:
+        app: sglang-embed
+        runtime: sglang
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "30000"
+    spec:
+      containers:
+        - name: sglang
+          image: lmsysorg/sglang:v0.3.0
+          ports:
+            - containerPort: 30000
+              name: http
+          args:
+            - "--model-path"
+            - "baai/bge-m3"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "30000"
+            - "--max-total-token"
+            - "8192"
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: "32Gi"
+            requests:
+              nvidia.com/gpu: 1
+              memory: "16Gi"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secrets
+                  key: token
+      nodeSelector:
+        accelerator: nvidia-tesla-a100
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sglang-embed
+  namespace: litellm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 30000
+      targetPort: 30000
+  selector:
+    app: sglang-embed

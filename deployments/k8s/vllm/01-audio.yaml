@@ -1,0 +1,127 @@
+# vLLM Audio Server - NVIDIA Parakeet TTS
+# Deploys nvidia/parakeet-tdt-0.6b-v3 and v2 for text-to-speech
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-audio
+  namespace: litellm
+  labels:
+    app: vllm-audio
+    runtime: vllm
+    owner: ml-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-audio
+  template:
+    metadata:
+      labels:
+        app: vllm-audio
+        runtime: vllm
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.6.4
+          ports:
+            - containerPort: 8000
+              name: http
+          args:
+            - "--model"
+            - "nvidia/parakeet-tdt-0.6b-v3"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            - "--max-model-len"
+            - "4096"
+            - "--dtype"
+            - "half"
+            - "--trust-remote-code"
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+              memory: "32Gi"
+            requests:
+              nvidia.com/gpu: 1
+              memory: "16Gi"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secrets
+                  key: token
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: model-cache
+          emptyDir: {}
+      nodeSelector:
+        accelerator: nvidia-tesla-a100
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-audio
+  namespace: litellm
+  labels:
+    app: vllm-audio
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: vllm-audio
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vllm-audio
+  namespace: litellm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vllm-audio
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: nvidia.com/gpu
+        target:
+          type: Utilization
+          averageUtilization: 80

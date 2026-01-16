@@ -1,0 +1,111 @@
+# SGLang LLM Server - High performance for large models
+# Deploys Mistral Large 3 and GPT-OSS-120B
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sglang-llm
+  namespace: litellm
+  labels:
+    app: sglang-llm
+    runtime: sglang
+    owner: engineering
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sglang-llm
+  template:
+    metadata:
+      labels:
+        app: sglang-llm
+        runtime: sglang
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "30000"
+    spec:
+      containers:
+        - name: sglang
+          image: lmsysorg/sglang:v0.3.0
+          ports:
+            - containerPort: 30000
+              name: http
+          args:
+            - "--model-path"
+            - "mistralai/mistral-large-3-675b-instruct-2512-nvfp4"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "30000"
+            - "--tensor-parallel"
+            - "4"
+            - "--max-total-token"
+            - "262144"
+            - "--trust-remote-code"
+          resources:
+            limits:
+              nvidia.com/gpu: 4
+              memory: "256Gi"
+            requests:
+              nvidia.com/gpu: 4
+              memory: "128Gi"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secrets
+                  key: token
+            - name: SGLANG_WORKER_MULTIPROC
+              value: "true"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 30000
+            initialDelaySeconds: 120
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 30000
+            initialDelaySeconds: 60
+      nodeSelector:
+        accelerator: nvidia-h100
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sglang-llm
+  namespace: litellm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 30000
+      targetPort: 30000
+  selector:
+    app: sglang-llm
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sglang-llm
+  namespace: litellm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sglang-llm
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: nvidia.com/gpu
+        target:
+          type: Utilization
+          averageUtilization: 70

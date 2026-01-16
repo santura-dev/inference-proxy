@@ -1,0 +1,108 @@
+# vLLM LLM Server - Qwen3-30B-A3B
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-llm
+  namespace: litellm
+  labels:
+    app: vllm-llm
+    runtime: vllm
+    owner: engineering
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-llm
+  template:
+    metadata:
+      labels:
+        app: vllm-llm
+        runtime: vllm
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.6.4
+          ports:
+            - containerPort: 8000
+              name: http
+          args:
+            - "--model"
+            - "Qwen/Qwen3-30B-A3B-Instruct-2507"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+            - "--max-model-len"
+            - "262144"
+            - "--dtype"
+            - "bfloat16"
+            - "--tensor-parallel-size"
+            - "2"
+          resources:
+            limits:
+              nvidia.com/gpu: 2
+              memory: "128Gi"
+            requests:
+              nvidia.com/gpu: 2
+              memory: "64Gi"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secrets
+                  key: token
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+      nodeSelector:
+        accelerator: nvidia-a100-80gb
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-llm
+  namespace: litellm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: vllm-llm
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: vllm-llm
+  namespace: litellm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vllm-llm
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: nvidia.com/gpu
+        target:
+          type: Utilization
+          averageUtilization: 75

@@ -1,0 +1,12 @@
+{{- if .Values.proxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "litellm.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    {{- .Files.Get "files/config.yaml" | nindent 4 }}
+{{- end }}
