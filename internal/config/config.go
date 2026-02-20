@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/santura-dev/litellm-backend/internal/models"
+	"github.com/santura-dev/inference-proxy/internal/models"
 )
 
-// Loader handles loading and validation of LiteLLM configuration.
+// Loader handles loading and validation of LiteLLM-style configuration.
 type Loader struct {
 	configPath string
 }
@@ -32,7 +34,6 @@ func (l *Loader) Load() (*models.LiteLLMConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Validate configuration
 	if err := l.validate(&config); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
@@ -54,7 +55,6 @@ func (l *Loader) validate(config *models.LiteLLMConfig) error {
 		if model.LiteLLMParams.Model == "" {
 			return fmt.Errorf("model '%s' has empty model in litellm_params", model.ModelName)
 		}
-
 		if seenModels[model.ModelName] {
 			return fmt.Errorf("duplicate model name: %s", model.ModelName)
 		}
@@ -70,33 +70,31 @@ func (l *Loader) LoadFromEnv() (*models.LiteLLMConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Apply environment variable substitutions
 	l.substituteEnvVars(config)
-
 	return config, nil
 }
 
-// substituteEnvVars replaces template variables with environment values.
+// envVarPattern matches LiteLLM-style "os.environ.SOME_VAR" references.
+var envVarPattern = regexp.MustCompile(`os\.environ\.([A-Za-z_][A-Za-z0-9_]*)`)
+
+// substituteEnvVars replaces "os.environ.VAR_NAME" references with values
+// from the environment. Unresolved references are left as-is and treated
+// as unset downstream.
 func (l *Loader) substituteEnvVars(config *models.LiteLLMConfig) {
 	for i := range config.ModelList {
-		model := &config.ModelList[i]
-		if model.LiteLLMParams.APIKey != "" && model.LiteLLMParams.APIKey == "os.environ.INTERNAL_API_KEY" {
-			if key := os.Getenv("INTERNAL_API_KEY"); key != "" {
-				model.LiteLLMParams.APIKey = key
-			}
-		}
-		if model.LiteLLMParams.APIKey != "" && model.LiteLLMParams.APIKey == "os.environ.ANTHROPIC_API_KEY" {
-			if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-				model.LiteLLMParams.APIKey = key
-			}
-		}
-		if model.LiteLLMParams.APIKey != "" && model.LiteLLMParams.APIKey == "os.environ.OPENAI_API_KEY" {
-			if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-				model.LiteLLMParams.APIKey = key
-			}
-		}
+		config.ModelList[i].LiteLLMParams.APIKey = expandEnv(config.ModelList[i].LiteLLMParams.APIKey)
 	}
+	config.GeneralSettings.MasterKey = expandEnv(config.GeneralSettings.MasterKey)
+}
+
+func expandEnv(s string) string {
+	return envVarPattern.ReplaceAllStringFunc(s, func(match string) string {
+		name := strings.TrimPrefix(match, "os.environ.")
+		if v := os.Getenv(name); v != "" {
+			return v
+		}
+		return match
+	})
 }
 
 // FindModel finds a model configuration by name.
@@ -126,75 +124,13 @@ func (l *Loader) FindModelsByCapability(config *models.LiteLLMConfig, capability
 	return result
 }
 
-// FindModelsByOwner finds all models owned by the specified team.
-func (l *Loader) FindModelsByOwner(config *models.LiteLLMConfig, owner string) []*models.ModelConfig {
-	var result []*models.ModelConfig
-	for i := range config.ModelList {
-		model := &config.ModelList[i]
-		if model.ModelInfo != nil && model.ModelInfo.Owner == owner {
-			result = append(result, model)
-		}
-	}
-	return result
-}
-
-// GetModelsByPriority returns models sorted by priority.
-func (l *Loader) GetModelsByPriority(config *models.LiteLLMConfig) []*models.ModelConfig {
-	models := make([]*models.ModelConfig, len(config.ModelList))
-	for i := range config.ModelList {
-		models[i] = &config.ModelList[i]
-	}
-
-	// Sort by priority (lower number = higher priority)
-	// For models without priority, default to 999
-	for i := range models {
-		if models[i].ModelInfo != nil && models[i].ModelInfo.Priority == 0 {
-			models[i].ModelInfo.Priority = 999
-		}
-	}
-
-	// Simple insertion sort for small lists
-	for i := 1; i < len(models); i++ {
-		key := models[i]
-		j := i - 1
-		for j >= 0 {
-			keyPriority := 999
-			if key.ModelInfo != nil {
-				keyPriority = key.ModelInfo.Priority
-			}
-			currentPriority := 999
-			if models[j].ModelInfo != nil {
-				currentPriority = models[j].ModelInfo.Priority
-			}
-			if currentPriority <= keyPriority {
-				break
-			}
-			models[j+1] = models[j]
-			j--
-		}
-		models[j+1] = key
-	}
-
-	return models
-}
-
-// GetModelNames returns a list of all model names.
-func (l *Loader) GetModelNames(config *models.LiteLLMConfig) []string {
-	names := make([]string, len(config.ModelList))
-	for i, model := range config.ModelList {
-		names[i] = model.ModelName
-	}
-	return names
-}
-
-// LoadDefault loads configuration from the default config.yaml location.
+// LoadDefault loads configuration from the default config.yaml locations.
 func LoadDefault() (*models.LiteLLMConfig, error) {
-	// Try multiple common locations
 	locations := []string{
 		"config.yaml",
 		"./config.yaml",
-		"/etc/litellm/config.yaml",
-		filepath.Join(os.Getenv("HOME"), ".litellm", "config.yaml"),
+		"/etc/inference-proxy/config.yaml",
+		filepath.Join(os.Getenv("HOME"), ".inference-proxy", "config.yaml"),
 	}
 
 	for _, loc := range locations {

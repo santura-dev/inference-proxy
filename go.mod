@@ -1,4 +1,4 @@
-module github.com/santura-dev/litellm-backend
+module github.com/santura-dev/inference-proxy
 
 go 1.25.5
 
