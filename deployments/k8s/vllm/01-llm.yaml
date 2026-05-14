@@ -1,14 +1,14 @@
-# vLLM LLM Server - Qwen3-30B-A3B
+# vLLM LLM server example (Llama 3.1 8B)
+
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllm-llm
-  namespace: litellm
+  namespace: inference
   labels:
     app: vllm-llm
     runtime: vllm
-    owner: engineering
 spec:
   replicas: 1
   selector:
@@ -31,78 +31,60 @@ spec:
               name: http
           args:
             - "--model"
-            - "Qwen/Qwen3-30B-A3B-Instruct-2507"
+            - "meta-llama/Llama-3.1-8B-Instruct"
             - "--host"
             - "0.0.0.0"
             - "--port"
             - "8000"
             - "--max-model-len"
-            - "262144"
+            - "32768"
+            - "--enable-prefix-caching"
             - "--dtype"
             - "bfloat16"
-            - "--tensor-parallel-size"
-            - "2"
           resources:
             limits:
-              nvidia.com/gpu: 2
-              memory: "128Gi"
+              nvidia.com/gpu: 1
+              memory: "32Gi"
             requests:
-              nvidia.com/gpu: 2
-              memory: "64Gi"
+              nvidia.com/gpu: 1
+              memory: "16Gi"
           env:
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hf-secrets
                   key: token
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 60
+            initialDelaySeconds: 30
+            periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
             initialDelaySeconds: 30
-      nodeSelector:
-        accelerator: nvidia-a100-80gb
-      tolerations:
-        - key: "nvidia.com/gpu"
-          operator: "Exists"
-          effect: "NoSchedule"
-
+            periodSeconds: 10
+      volumes:
+        - name: model-cache
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: vllm-llm
-  namespace: litellm
+  namespace: inference
+  labels:
+    app: vllm-llm
 spec:
   type: ClusterIP
   ports:
     - port: 8000
       targetPort: 8000
+      name: http
   selector:
     app: vllm-llm
-
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: vllm-llm
-  namespace: litellm
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: vllm-llm
-  minReplicas: 1
-  maxReplicas: 4
-  metrics:
-    - type: Resource
-      resource:
-        name: nvidia.com/gpu
-        target:
-          type: Utilization
-          averageUtilization: 75

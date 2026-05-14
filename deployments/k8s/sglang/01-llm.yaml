@@ -1,16 +1,14 @@
-# SGLang LLM Server - High performance for large models
-# Deploys Mistral Large 3 and GPT-OSS-120B
+# SGLang LLM server example (Qwen 2.5 7B)
 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: sglang-llm
-  namespace: litellm
+  namespace: inference
   labels:
     app: sglang-llm
     runtime: sglang
-    owner: engineering
 spec:
   replicas: 1
   selector:
@@ -33,79 +31,54 @@ spec:
               name: http
           args:
             - "--model-path"
-            - "mistralai/mistral-large-3-675b-instruct-2512-nvfp4"
+            - "Qwen/Qwen2.5-7B-Instruct"
             - "--host"
             - "0.0.0.0"
             - "--port"
             - "30000"
-            - "--tensor-parallel"
-            - "4"
+            - "--tp"
+            - "1"
+            - "--enable-prefix-caching"
             - "--max-total-token"
-            - "262144"
-            - "--trust-remote-code"
+            - "32768"
           resources:
             limits:
-              nvidia.com/gpu: 4
-              memory: "256Gi"
+              nvidia.com/gpu: 1
+              memory: "32Gi"
             requests:
-              nvidia.com/gpu: 4
-              memory: "128Gi"
+              nvidia.com/gpu: 1
+              memory: "16Gi"
           env:
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: hf-secrets
                   key: token
-            - name: SGLANG_WORKER_MULTIPROC
-              value: "true"
           livenessProbe:
             httpGet:
               path: /health
               port: 30000
-            initialDelaySeconds: 120
+            initialDelaySeconds: 30
+            periodSeconds: 30
           readinessProbe:
             httpGet:
               path: /health
               port: 30000
-            initialDelaySeconds: 60
-      nodeSelector:
-        accelerator: nvidia-h100
-      tolerations:
-        - key: "nvidia.com/gpu"
-          operator: "Exists"
-          effect: "NoSchedule"
-
+            initialDelaySeconds: 30
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: sglang-llm
-  namespace: litellm
+  namespace: inference
+  labels:
+    app: sglang-llm
 spec:
   type: ClusterIP
   ports:
     - port: 30000
       targetPort: 30000
+      name: http
   selector:
     app: sglang-llm
-
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: sglang-llm
-  namespace: litellm
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: sglang-llm
-  minReplicas: 1
-  maxReplicas: 2
-  metrics:
-    - type: Resource
-      resource:
-        name: nvidia.com/gpu
-        target:
-          type: Utilization
-          averageUtilization: 70

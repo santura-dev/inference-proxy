@@ -2,10 +2,10 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "litellm.proxy.fullname" . }}
+  name: {{ include "inferenceProxy.proxy.fullname" . }}
   namespace: {{ .Values.global.namespace }}
   labels:
-    {{- include "litellm.labels" . | nindent 4 }}
+    {{- include "inferenceProxy.labels" . | nindent 4 }}
   annotations:
     {{- toYaml .Values.proxy.ingress.annotations | nindent 4 }}
 spec:
@@ -15,14 +15,14 @@ spec:
     {{- toYaml .Values.proxy.ingress.tls | nindent 4 }}
   {{- end }}
   rules:
-    - host: litellm-api.{{ .Values.global.domain }}
+    - host: inference-api.{{ .Values.global.domain }}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: litellm-proxy
+                name: inference-proxy
                 port:
                   number: {{ .Values.proxy.service.port }}
 {{- end }}

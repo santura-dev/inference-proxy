@@ -2,14 +2,14 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "litellm.fullname" . }}
+  name: {{ include "inferenceProxy.fullname" . }}
   namespace: {{ .Values.global.namespace }}
   labels:
-    {{- include "litellm.labels" . | nindent 4 }}
+    {{- include "inferenceProxy.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      {{- include "litellm.selectorLabels" . | nindent 6 }}
+      {{- include "inferenceProxy.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: proxy
   policyTypes:
     - Ingress

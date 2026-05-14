@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: litellm-config
+  name: inference-config
   namespace: {{ .Values.global.namespace }}
   labels:
-    {{- include "litellm.labels" . | nindent 4 }}
+    {{- include "inferenceProxy.labels" . | nindent 4 }}
 data:
   config.yaml: |
     {{- .Files.Get "files/config.yaml" | nindent 4 }}

@@ -9,7 +9,6 @@ model_list:
       api_base: http://vllm-llm:8000/v1
     model_info:
       mode: chat
-      description: Llama 3.1 8B on vLLM
       capabilities: ["chat", "tools"]
       priority: 1
       tags: ["llm", "vllm"]
@@ -20,7 +19,6 @@ model_list:
       api_base: http://sglang-llm:30000/v1
     model_info:
       mode: chat
-      description: Qwen 2.5 7B on SGLang
       capabilities: ["chat", "tools"]
       priority: 2
       tags: ["llm", "sglang"]
@@ -31,14 +29,11 @@ model_list:
       api_base: http://sglang-embed:30000/v1
     model_info:
       mode: embeddings
-      description: BGE M3 embeddings on SGLang
       capabilities: ["embeddings"]
       priority: 1
       tags: ["embedding", "sglang"]
 
-## General settings
 general_settings:
-  # when a key resolves, requests must send "Authorization: Bearer <key>"
   master_key: os.environ.INFERENCE_PROXY_MASTER_KEY
   stream_timeout: 30
   max_retries: 3

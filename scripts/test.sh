@@ -1,14 +1,14 @@
 #!/bin/bash
-# LiteLLM Backend Test Script
+# inference-proxy test script
 # Tests API endpoints and model connectivity
 
 set -e
 
-PROXY_URL="${LITELLM_URL:-http://localhost:4000}"
+PROXY_URL="${INFERENCE_PROXY_URL:-http://localhost:4000}"
 NAMESPACE="${NAMESPACE:-litellm}"
 
 echo "============================================"
-echo "  LiteLLM Backend Tests"
+echo "  inference-proxy tests"
 echo "============================================"
 echo ""
 echo "Proxy URL: $PROXY_URL"
@@ -72,7 +72,7 @@ test_chat() {
     response=$(curl -sf -X POST "${PROXY_URL}/v1/chat/completions" \
         -H "Content-Type: application/json" \
         -d '{
-            "model": "mistral-large-3-675b",
+            "model": "llama-3.1-8b",
             "messages": [{"role": "user", "content": "Say hello"}],
             "max_tokens": 50
         }' 2>/dev/null)
@@ -92,7 +92,7 @@ test_embeddings() {
     response=$(curl -sf -X POST "${PROXY_URL}/v1/embeddings" \
         -H "Content-Type: application/json" \
         -d '{
-            "model": "baai-bge-m3",
+            "model": "bge-m3",
             "input": ["Hello world", "Test embedding"]
         }' 2>/dev/null)
     if [ $? -eq 0 ]; then
@@ -169,7 +169,7 @@ run_tests() {
 # Port forward helper
 port_forward() {
     echo "Starting port forward to proxy..."
-    kubectl port-forward -n $NAMESPACE svc/litellm-proxy 4000:4000
+    kubectl port-forward -n $NAMESPACE svc/inference-proxy 4000:4000
 }
 
 # Show usage

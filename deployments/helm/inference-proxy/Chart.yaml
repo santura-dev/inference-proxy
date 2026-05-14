@@ -1,0 +1,20 @@
+apiVersion: v2
+name: inference-proxy
+description: Health-aware routing proxy for vLLM and SGLang model servers
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+keywords:
+  - inference
+  - proxy
+  - vllm
+  - sglang
+  - llm
+  - kubernetes
+
+home: https://github.com/santura-dev/inference-proxy
+
+maintainers:
+  - name: santura-dev
+    email: dev@santura.dev

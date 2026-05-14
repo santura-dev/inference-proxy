@@ -1,33 +1,19 @@
-# Default values for litellm-backend
-# This file is managed by Helm. DO NOT edit manually.
-
 global:
-  # Global settings that apply to all components
   imageRegistry: ghcr.io
   imagePullSecrets:
     - name: registry-credentials
-
-  # Domain for ingress
   domain: santura.dev
+  namespace: inference
 
-  # Namespace override (default: litellm)
-  namespace: litellm
-
-# LiteLLM Proxy Configuration
 proxy:
-  # Enable/disable proxy deployment
   enabled: true
-
-  # Replica count
   replicas: 3
 
-  # Image configuration
   image:
-    repository: santura-dev/litellm-backend
+    repository: santura-dev/inference-proxy
     tag: latest
     pullPolicy: Always
 
-  # Resource limits and requests
   resources:
     limits:
       cpu: "2"
@@ -36,16 +22,17 @@ proxy:
       cpu: "500m"
       memory: "1Gi"
 
-  # Service configuration
   service:
     type: ClusterIP
     port: 4000
-    metricsPort: 4001
 
-  # Ingress configuration
   ingress:
     enabled: true
     className: nginx
+    tls:
+      - hosts:
+          - inference-api.santura.dev
+        secretName: inference-tls
     annotations:
       nginx.ingress.kubernetes.io/proxy-body-size: "50m"
       nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
@@ -53,7 +40,6 @@ proxy:
       nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
       cert-manager.io/cluster-issuer: letsencrypt-prod
 
-  # HPA configuration
   autoscaling:
     enabled: true
     minReplicas: 3
@@ -61,7 +47,6 @@ proxy:
     targetCPUUtilization: 70
     targetMemoryUtilization: 80
 
-  # Health check configuration
   livenessProbe:
     initialDelaySeconds: 10
     periodSeconds: 30
@@ -71,24 +56,18 @@ proxy:
     periodSeconds: 10
     failureThreshold: 3
 
-  # Environment variables
-  env:
-    LITELLM_LOG_LEVEL: info
-    OTEL_SERVICE_NAME: litellm-proxy
+  env: {}
 
-  # Master key (should be provided via secrets)
+  # Provide via a secret in production. Empty disables request auth.
   masterKey: ""
 
-  # Node affinity
   nodeSelector: {}
   tolerations: []
   affinity: {}
 
-# Monitoring configuration
 monitoring:
   enabled: true
 
-  # Prometheus ServiceMonitor
   serviceMonitor:
     enabled: true
     namespace: monitoring
@@ -97,30 +76,6 @@ monitoring:
     labels:
       release: prometheus
 
-  # Prometheus PodMonitor
-  podMonitor:
-    enabled: false
-    namespace: monitoring
-    interval: 30s
-    labels:
-      release: prometheus
-
-  # Grafana dashboards
-  dashboards:
-    enabled: true
-    namespace: monitoring
-    labels:
-      grafana_dashboard: "1"
-
-# Redis configuration (for caching)
-redis:
-  enabled: true
-  host: redis-master
-  port: 6379
-  password: ""
-  existingSecret: redis-credentials
-
-# Security context
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
@@ -133,7 +88,6 @@ containerSecurityContext:
     drop:
       - ALL
 
-# Network policies
 networkPolicy:
   enabled: true
   ingress:
@@ -152,30 +106,6 @@ networkPolicy:
         - port: 53
           protocol: TCP
 
-# Pod disruption budget
 podDisruptionBudget:
   enabled: true
   minAvailable: 2
-
-# RBAC configuration
-rbac:
-  create: true
-  annotations: {}
-
-# Service account
-serviceAccount:
-  create: true
-  name: litellm
-  annotations: {}
-
-# Additional volumes
-extraVolumes: []
-# - name: config
-#   configMap:
-#     name: litellm-config
-
-# Additional volume mounts
-extraVolumeMounts: []
-# - name: config
-#   mountPath: /etc/litellm
-#   readOnly: true

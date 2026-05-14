@@ -2,20 +2,20 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "litellm.proxy.fullname" . }}
+  name: {{ include "inferenceProxy.proxy.fullname" . }}
   namespace: {{ .Values.monitoring.serviceMonitor.namespace }}
   labels:
-    {{- include "litellm.labels" . | nindent 4 }}
+    {{- include "inferenceProxy.labels" . | nindent 4 }}
     {{- toYaml .Values.monitoring.serviceMonitor.labels | nindent 4 }}
 spec:
   endpoints:
-    - port: metrics
+    - port: http
       path: /metrics
       interval: {{ .Values.monitoring.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
   selector:
     matchLabels:
-      {{- include "litellm.selectorLabels" . | nindent 6 }}
+      {{- include "inferenceProxy.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: proxy
   namespaceSelector:
     matchNames:

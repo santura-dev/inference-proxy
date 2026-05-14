@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "litellm.name" -}}
+{{- define "inferenceProxy.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "litellm.fullname" -}}
+{{- define "inferenceProxy.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "litellm.chart" -}}
+{{- define "inferenceProxy.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "litellm.labels" -}}
-helm.sh/chart: {{ include "litellm.chart" . }}
-{{ include "litellm.selectorLabels" . }}
+{{- define "inferenceProxy.labels" -}}
+helm.sh/chart: {{ include "inferenceProxy.chart" . }}
+{{ include "inferenceProxy.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -43,39 +43,27 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "litellm.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "litellm.name" . }}
+{{- define "inferenceProxy.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "inferenceProxy.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-{{- end }}
-
-{{/*
-Create the name of the service account to use
-*/}}
-{{- define "litellm.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "litellm.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
 {{- end }}
 
 {{/*
 Proxy full name
 */}}
-{{- define "litellm.proxy.fullname" -}}
-{{- printf "%s-proxy" (include "litellm.fullname" .) }}
+{{- define "inferenceProxy.proxy.fullname" -}}
+{{- printf "%s-proxy" (include "inferenceProxy.fullname" .) }}
 {{- end }}
 
 {{/*
 Create environment variables
 */}}
-{{- define "litellm.proxy.env" -}}
+{{- define "inferenceProxy.proxy.env" -}}
 {{- $env := list }}
 {{- if .Values.proxy.masterKey }}
-{{- $env = append $env (dict "name" "LITELLM_MASTER_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "litellm-secrets" "key" "LITELLM_MASTER_KEY"))) }}
+{{- $env = append $env (dict "name" "INFERENCE_PROXY_MASTER_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" "inference-secrets" "key" "INFERENCE_PROXY_MASTER_KEY"))) }}
 {{- end }}
-{{- $env = append $env (dict "name" "LITELLM_CONFIG" "value" "/etc/litellm/config.yaml") }}
-{{- $env = append $env (dict "name" "OTEL_SERVICE_NAME" "value" "litellm-proxy") }}
+{{- $env = append $env (dict "name" "INFERENCE_PROXY_CONFIG" "value" "/etc/inference-proxy/config.yaml") }}
 {{- if .Values.proxy.env }}
 {{- range $k, $v := .Values.proxy.env }}
 {{- $env = append $env (dict "name" $k "value" $v) }}

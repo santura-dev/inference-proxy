@@ -1,198 +1,68 @@
-# Kubernetes Namespace for LiteLLM Backend
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: litellm
+  name: inference
   labels:
-    owner: ml-platform
     environment: production
 ---
-# ConfigMap for LiteLLM configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: litellm-config
-  namespace: litellm
+  name: inference-config
+  namespace: inference
 data:
   config.yaml: |
     model_list:
-      # Audio Models
-      - model_name: nvidia-parakeet-tdt-0_6b-v3
+      - model_name: llama-3.1-8b
         litellm_params:
-          model: nvidia/parakeet-tdt-0.6b-v3
-          api_base: http://vllm-audio.litellm.svc.cluster.local:8000/v1
+          model: meta-llama/Llama-3.1-8B-Instruct
+          api_base: http://vllm-llm:8000/v1
         model_info:
-          mode: audio_speech
-          owner: ml-platform
-          capabilities: ["tts", "audio"]
+          mode: chat
+          capabilities: ["chat", "tools"]
           priority: 1
-          tags: ["audio", "nvidia"]
+          tags: ["llm", "vllm"]
 
-      - model_name: nvidia-parakeet-tdt-0_6b-v2
+      - model_name: qwen-7b
         litellm_params:
-          model: nvidia/parakeet-tdt-0.6b-v2
-          api_base: http://vllm-audio.litellm.svc.cluster.local:8000/v1
+          model: Qwen/Qwen2.5-7B-Instruct
+          api_base: http://sglang-llm:30000/v1
         model_info:
-          mode: audio_speech
-          owner: ml-platform
-          capabilities: ["tts", "audio"]
+          mode: chat
+          capabilities: ["chat", "tools"]
           priority: 2
-          tags: ["audio", "nvidia"]
+          tags: ["llm", "sglang"]
 
-      # LLM Models
-      - model_name: mistral-large-3-675b
-        litellm_params:
-          model: mistralai/mistral-large-3-675b-instruct-2512-nvfp4
-          api_base: http://sglang-llm.litellm.svc.cluster.local:30000/v1
-        model_info:
-          mode: chat
-          owner: engineering
-          capabilities: ["chat", "text", "images", "tools", "json"]
-          priority: 1
-          tags: ["llm", "mistral"]
-
-      - model_name: qwen3-30b-a3b
-        litellm_params:
-          model: Qwen/Qwen3-30B-A3B-Instruct-2507
-          api_base: http://vllm-llm.litellm.svc.cluster.local:8000/v1
-        model_info:
-          mode: chat
-          owner: engineering
-          capabilities: ["chat", "text"]
-          priority: 2
-          tags: ["llm", "qwen"]
-
-      - model_name: openai-gpt-oss-120b
-        litellm_params:
-          model: openai/gpt-oss-120b
-          api_base: http://sglang-llm.litellm.svc.cluster.local:30000/v1
-        model_info:
-          mode: chat
-          owner: engineering
-          capabilities: ["chat", "text", "tools"]
-          priority: 3
-          tags: ["llm", "openai-style"]
-
-      - model_name: qwen3-vl-235b
-        litellm_params:
-          model: Qwen/Qwen3-VL-235B-A22B-Thinking
-          api_base: http://vllm-vision.litellm.svc.cluster.local:8000/v1
-        model_info:
-          mode: vision
-          owner: vision-team
-          capabilities: ["chat", "text", "images", "vision"]
-          priority: 1
-          tags: ["llm", "qwen", "vision"]
-
-      - model_name: meta-llama-4-maverick
-        litellm_params:
-          model: meta-llama/llama-4-maverick-17b-128e-instruct
-          api_base: http://vllm-vision.litellm.svc.cluster.local:8000/v1
-        model_info:
-          mode: chat
-          owner: engineering
-          capabilities: ["chat", "text", "images", "multimodal"]
-          priority: 2
-          tags: ["llm", "meta"]
-
-      # Embedding Models
-      - model_name: baai-bge-m3
+      - model_name: bge-m3
         litellm_params:
           model: baai/bge-m3
-          api_base: http://sglang-embed.litellm.svc.cluster.local:30000/v1
+          api_base: http://sglang-embed:30000/v1
         model_info:
           mode: embeddings
-          owner: search-team
           capabilities: ["embeddings"]
           priority: 1
-          tags: ["embedding", "baai"]
-
-      - model_name: sentence-transformers-minilm-l6
-        litellm_params:
-          model: sentence-transformers/all-MiniLM-L6-v2
-          api_base: http://vllm-embed.litellm.svc.cluster.local:8000/v1
-        model_info:
-          mode: embeddings
-          owner: search-team
-          capabilities: ["embeddings", "semantic"]
-          priority: 2
-          tags: ["embedding", "fast"]
-
-      - model_name: intfloat-multilingual-e5-large
-        litellm_params:
-          model: intfloat/multilingual-e5-large-instruct
-          api_base: http://vllm-embed.litellm.svc.cluster.local:8000/v1
-        model_info:
-          mode: embeddings
-          owner: documents
-          capabilities: ["embeddings", "multilingual"]
-          priority: 3
-          tags: ["embedding", "multilingual"]
-
-      # OCR Models
-      - model_name: deepseek-ocr
-        litellm_params:
-          model: deepseek/deepseek-ocr
-          api_base: http://vllm-vision.litellm.svc.cluster.local:8000/v1
-        model_info:
-          mode: vision
-          owner: documents
-          capabilities: ["ocr", "vision"]
-          priority: 1
-          tags: ["ocr", "deepseek"]
+          tags: ["embedding", "sglang"]
 
     general_settings:
-      master_key: os.environ.LITELLM_MASTER_KEY
+      master_key: os.environ.INFERENCE_PROXY_MASTER_KEY
       stream_timeout: 30
       max_retries: 3
       retry_on_failure: true
-
-    litellm_settings:
-      cache_type: redis
-      cache_expiry_seconds: 300
 ---
-# Secrets for API keys
 apiVersion: v1
 kind: Secret
 metadata:
-  name: litellm-secrets
-  namespace: litellm
+  name: inference-secrets
+  namespace: inference
 type: Opaque
 stringData:
-  LITELLM_MASTER_KEY: "your-master-key-here"
-  INTERNAL_API_KEY: "your-internal-api-key"
+  INFERENCE_PROXY_MASTER_KEY: "change-me"
 ---
-# ServiceAccount for LiteLLM
 apiVersion: v1
-kind: ServiceAccount
+kind: Secret
 metadata:
-  name: litellm
-  namespace: litellm
----
-# RBAC for LiteLLM
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: litellm-role
-  namespace: litellm
-rules:
-  - apiGroups: [""]
-    resources: ["configmaps", "secrets", "services", "endpoints"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch", "delete"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: litellm-binding
-  namespace: litellm
-subjects:
-  - kind: ServiceAccount
-    name: litellm
-    namespace: litellm
-roleRef:
-  kind: Role
-  name: litellm-role
-  apiGroup: rbac.authorization.k8s.io
+  name: hf-secrets
+  namespace: inference
+type: Opaque
+stringData:
+  token: "hf_change_me"
