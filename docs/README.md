@@ -2,25 +2,20 @@
 
 ## Architecture & Concepts
 
-- [Overview](architecture.md) - Complete stack overview
-- [Routing](routing.md) - Request routing strategies
-- [Prefix Caching](prefix-caching.md) - KV cache reuse guide
+- [Overview](overview.md) - Request lifecycle, routing, health, configuration
+- [Architecture](architecture.md) - Stack overview
+- [Routing](routing.md) - Routing order, health, failover
+- [Prefix Caching](prefix-caching.md) - KV cache reuse and why sticky sessions matter
 - [Model Servers](model-servers.md) - vLLM/SGLang setup
-- [OME Operator](ome-operator.md) - K8s model deployment
 
 ## Quick Reference
 
 ### Request Flow
 ```
-App → LiteLLM → vLLM/SGLang → Redis → App
+App -> inference-proxy -> vLLM/SGLang -> App
 ```
 
 ### Key Concepts
-- **Prefix Caching**: 70-90% savings on cached prompts
-- **Sticky Sessions**: Same session → same replica
-- **OME Operator**: Declarative model deployment
-
-### Related Documentation
-- [LiteLLM Docs](https://docs.litellm.ai/)
-- [vLLM Docs](https://docs.vllm.ai/)
-- [KServe Docs](https://kserve.github.io/website/)
+- **Sticky Sessions**: Same session ID routes to the same backend
+- **Health Tracking**: 3 consecutive 5xx marks a backend unhealthy
+- **Prefix Caching**: 70-90% savings on cached prompts on the backend

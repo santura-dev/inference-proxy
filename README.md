@@ -1,275 +1,140 @@
-# LiteLLM Backend
+# inference-proxy
 
-Go-based LiteLLM proxy with intelligent routing for vLLM and SGLang model servers. Complete deployment stack with Kubernetes manifests, Helm charts, and monitoring.
+![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=flat&logo=go&logoColor=white) ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg) ![Docker](https://img.shields.io/badge/docker-ready-blue?logo=docker) ![Kubernetes](https://img.shields.io/badge/kubernetes-compatible-blue?logo=kubernetes) ![vLLM](https://img.shields.io/badge/vLLM-compatible-green) ![Helm](https://img.shields.io/badge/helm-chart-blue?logo=helm)
+
+Go reverse proxy for vLLM and SGLang. Sticky sessions per request ID, health-aware routing, automatic failover on repeated 5xx. Helm charts, HPA, PDB, ServiceMonitor included.
+
+## The problem
+
+Running inference at scale means model servers go down. Pods restart, GPUs run out of memory, network partitions happen. A round-robin load balancer keeps sending requests to a dead backend until a health check fires, and even then it does not remember which backends were failing. Multi-turn conversations lose their KV cache warmth when they bounce between backends, which is where most latency comes from.
+
+## The idea
+
+Three things: route requests to the right backend based on model capability, keep sessions sticky per request ID so multi-turn conversations hit the same backend and its warm KV cache, and fail over gracefully when a backend starts returning repeated 5xx errors. When the backend recovers, it gets re-added to the pool automatically.
+
+Accepts LiteLLM-style `model_list` configs as a compatibility feature, not as its identity. The routing, health tracking, and failover logic is the point. This is Go, not Python. It focuses on routing intelligence and reliability, not config compatibility. It does not implement every LiteLLM parameter.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        LiteLLM Proxy                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │   Gateway    │  │    Config    │  │       API            │  │
-│  │ - Sticky     │  │ - YAML Load  │  │ - /v1/chat/complete  │  │
-│  │   Sessions   │  │ - Validation │  │ - /v1/embeddings     │  │
-│  │ - Priority   │  │ - Discovery  │  │ - /metrics           │  │
-│  │ - Health     │  │              │  │                      │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-        ┌────────────────────┼────────────────────┐
-        │                    │                    │
-        ▼                    ▼                    ▼
-┌───────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│     vLLM      │  │     SGLang      │  │   Prometheus    │
-│  - Audio      │  │  - LLM (Mistral)│  │   Grafana       │
-│  - LLM        │  │  - Embeddings   │  │                 │
-│  - Vision     │  │                 │  │                 │
-│  - Embeddings │  │                 │  │                 │
-└───────────────┘  └─────────────────┘  └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     inference-proxy                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────────────┐  │
+│  │ gateway  │  │ config   │  │          api             │  │
+│  │ sticky   │  │ yaml load│  │ /v1/chat/completions     │  │
+│  │ sessions │  │ validate │  │ /v1/embeddings           │  │
+│  │ priority │  │ env vars │  │ /v1/models               │  │
+│  │ health   │  │          │  │ /metrics                 │  │
+│  └──────────┘  └──────────┘  └──────────────────────────┘  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        ▼                  ▼                  ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│    vLLM      │  │   SGLang     │  │ Prometheus   │
+│  port 8000   │  │  port 30000  │  │ Grafana      │
+└──────────────┘  └──────────────┘  └──────────────┘
 ```
 
-## Model Catalogue (11 Models)
+The gateway proxies requests to the selected backend and tracks health by watching response codes. After 3 consecutive 5xx responses (or connection errors) a backend is marked unhealthy and removed from selection. Requests fail over to the next candidate. A successful response resets the error count.
 
-| Category | Model | Provider | Parameters | Context | Server |
-|----------|-------|----------|------------|---------|--------|
-| **Audio** | `nvidia/parakeet-tdt-0.6b-v3` | NVIDIA | 0.6B | 4K | vLLM |
-| **Audio** | `nvidia/parakeet-tdt-0.6b-v2` | NVIDIA | 0.6B | 4K | vLLM |
-| **LLM** | `mistralai/mistral-large-3-675b-instruct-2512-nvfp4` | MistralAI | 675B | 256K | SGLang |
-| **LLM** | `Qwen/Qwen3-30B-A3B-Instruct-2507` | Qwen | 30B | 262K | vLLM |
-| **LLM** | `openai/gpt-oss-120b` | OpenAI | 120B | 131K | SGLang |
-| **LLM** | `Qwen/Qwen3-VL-235B-A22B-Thinking` | Qwen | 235B | 262K | vLLM |
-| **LLM** | `meta-llama/llama-4-maverick-17b-128e-instruct` | Meta-Llama | 400B | 300K | SGLang |
-| **Embed** | `baai/bge-m3` | BAAI | 567M | 8K | SGLang |
-| **Embed** | `sentence-transformers/all-MiniLM-L6-v2` | sentence-transformers | 22M | - | vLLM |
-| **Embed** | `intfloat/multilingual-e5-large-instruct` | intfloat | 0.6B | - | vLLM |
-| **OCR** | `deepseek/deepseek-ocr` | DeepSeek | 3B | 8K | vLLM |
+Sticky sessions work by request ID. Send an `X-Session-ID` header, or a `session_id` field in the request options. The first successful route pins that session to that backend for 30 minutes, so subsequent turns land on the same warm KV cache. This is where most latency savings come from for multi-turn conversations.
 
-## Project Structure
+Streaming responses are relayed as-is, flushed token by token, so server-sent events work without buffering.
 
-```
-litellm-backend/
-├── cmd/
-│   └── litellm-proxy/
-│       └── main.go              # Entry point
-/
-│   └── server.go                # HTTP API with chi router
-├──├── api internal/
-│   ├── config/
-│   │   └── config.go            # Config loading & validation
-│   ├── gateway/
-│   │   └── gateway.go           # Routing logic, sticky sessions
-│   └── models/
-│       └── models.go            # Type definitions
-├── config.yaml                  # Model catalogue (11 models)
-├── Dockerfile                   # Multi-stage build
-├── Makefile                     # Build, test, deploy targets
-├── go.mod / go.sum              # Dependencies
-├── deployments/
-│   ├── k8s/                     # Kubernetes manifests
-│   │   ├── namespace/           # Namespace, ConfigMap, RBAC
-│   │   ├── proxy/               # Proxy deployment + HPA + Ingress
-│   │   ├── vllm/                # vLLM servers (audio, llm, vision)
-│   │   └── sglang/              # SGLang servers (llm, embed)
-│   ├── ome/                     # OME Operator CRDs
-│   │   ├── 01-base-models.yaml  # BaseModel definitions
-│   │   ├── 02-serving-runtimes.yaml  # ServingRuntime definitions
-│   │   └── 03-inference-services.yaml  # InferenceService bindings
-│   └── helm/                    # Helm charts
-│       └── litellm/
-│           ├── Chart.yaml
-│           ├── values.yaml
-│           ├── templates/
-│           │   ├── _helpers.tpl
-│           │   ├── deployment-proxy.yaml
-│           │   ├── service-proxy.yaml
-│           │   ├── hpa-proxy.yaml
-│           │   ├── ingress.yaml
-│           │   ├── servicemonitor.yaml
-│           │   ├── networkpolicy.yaml
-│           │   ├── configmap.yaml
-│           │   └── pdb.yaml
-│           └── files/
-│               └── config.yaml
-├── scripts/
-│   ├── deploy.sh                # Full deployment orchestration
-│   └── test.sh                  # API testing script
-└── README.md                    # This file
-```
+## Example model catalogue
 
-## Routing Strategies
+`config.yaml` ships with a small example catalogue. Point each entry at your own model servers.
 
-### 1. Sticky Sessions (Prefix Caching)
-For repeated prompts, route to the same model instance:
-- Benefits: 70-90% KV cache reuse
-- Implementation: `session_id` in request options
+| model | capabilities | priority | server |
+|---|---|---|---|
+| llama-3.1-8b | chat, tools | 1 | vLLM |
+| qwen-7b | chat, tools | 2 | SGLang |
+| bge-m3 | embeddings | 1 | SGLang |
 
-### 2. Priority-Based Routing
-Models selected by configured priority (lower = higher priority):
-```yaml
-mistral-large-3-675b: priority 1
-qwen3-30b-a3b: priority 2
-nvidia-parakeet-tdt-0.6b-v3: priority 3
-```
+Routing order: exact `model` match from the request, then sticky session, then the capability pool ordered by priority. Lower priority number wins; backends with the same priority are load balanced randomly.
 
-### 3. Capability-Based Routing
-Automatic model selection by request type:
-- `chat` → LLM models
-- `embeddings` → Embedding models
-- `vision` → Vision/OCR models
-- `audio` → TTS/Speech models
+## API
 
-## Quick Start
+| endpoint | description |
+|---|---|
+| `POST /v1/chat/completions` | Proxied chat completions, streaming supported |
+| `POST /v1/completions` | Proxied legacy completions |
+| `POST /v1/embeddings` | Proxied embeddings |
+| `GET /v1/models` | Configured models with capabilities |
+| `GET /status` | Live backend health |
+| `GET /health`, `GET /ready` | Liveness and readiness for Kubernetes |
+| `GET /metrics` | Prometheus metrics |
 
-### Build from Source
+When a master key resolves in the config, every `/v1` request must send `Authorization: Bearer <key>`. Health, readiness, and metrics stay open for probes and scraping.
+
+## Run
 
 ```bash
-cd /home/sandra/inference/projects/litellm-backend
 make build
-./bin/litellm-proxy
+./bin/inference-proxy
 ```
 
-### Docker
+Or straight from source:
 
 ```bash
-docker build -t ghcr.io/santura-dev/litellm-backend:latest .
-docker run -p 4000:4000 ghcr.io/santura-dev/litellm-backend:latest
+go run ./cmd/inference-proxy/
 ```
 
-### Kubernetes
-
-```bash
-# Using kubectl manifests
-make deploy
-
-# Using Helm
-helm install litellm ./deployments/helm/litellm/
-
-# Using deployment script
-./scripts/deploy.sh
-```
+The proxy listens on `:4000`. Override with `INFERENCE_PROXY_ADDR`, and the config path with `INFERENCE_PROXY_CONFIG`.
 
 ## Configuration
 
-### Environment Variables
+Each entry in `model_list` maps a model name to a backend. The format follows LiteLLM for compatibility:
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `LITELLM_CONFIG` | Path to config.yaml | No (default: config.yaml) |
-| `LITELLM_MASTER_KEY` | Master API key | Yes |
-| `INTERNAL_API_KEY` | Internal model access | Yes |
-| `LITELLM_ADDR` | Listen address | No (default: :4000) |
-| `OTEL_SERVICE_NAME` | OpenTelemetry service name | No |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint | No |
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Health check |
-| `/ready` | GET | Readiness check |
-| `/metrics` | GET | Prometheus metrics |
-| `/v1/chat/completions` | POST | Chat completion |
-| `/v1/embeddings` | POST | Embeddings |
-| `/v1/models` | GET | List models |
-| `/models` | GET | Model status |
-| `/status` | GET | Detailed status |
-
-### Example Request
-
-```bash
-curl -X POST http://localhost:4000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
-  -d '{
-    "model": "mistral-large-3-675b",
-    "messages": [{"role": "user", "content": "Hello!"}],
-    "max_tokens": 100
-  }'
+```yaml
+model_list:
+  - model_name: llama-3.1-8b
+    litellm_params:
+      model: meta-llama/Llama-3.1-8B-Instruct
+      api_base: http://vllm-llm:8000/v1
+    model_info:
+      mode: chat
+      capabilities: ["chat", "tools"]
+      priority: 1
 ```
 
-## Model Server Endpoints
+- `api_base` includes the `/v1` prefix, as in LiteLLM
+- `capabilities` drives routing for requests that do not name an exact model
+- `priority` orders candidates, lower is better
+- `api_key` and `general_settings.master_key` accept `os.environ.VAR_NAME` references and resolve from the environment
 
-| Server | Service | Port | Models |
-|--------|---------|------|--------|
-| vLLM Audio | `vllm-audio.litellm.svc` | 8000 | Parakeet TTS |
-| vLLM LLM | `vllm-llm.litellm.svc` | 8000 | Qwen3-30B |
-| vLLM Vision | `vllm-vision.litellm.svc` | 8000 | Qwen3-VL, DeepSeek OCR |
-| vLLM Embed | `vllm-embed.litellm.svc` | 8000 | MiniLM, Multilingual E5 |
-| SGLang LLM | `sglang-llm.litellm.svc` | 30000 | Mistral Large, GPT-OSS, Llama 4 |
-| SGLang Embed | `sglang-embed.litellm.svc` | 30000 | BGE M3 |
+## Structure
+
+```
+cmd/inference-proxy/main.go    # entry point
+api/server.go                  # HTTP API, proxying, auth, metrics
+internal/config/config.go      # config loading, validation, env substitution
+internal/gateway/gateway.go    # routing, health, failover, sticky sessions
+internal/models/models.go      # type definitions
+config.yaml                    # example model catalogue
+deployments/helm/              # Helm chart (HPA, PDB, ServiceMonitor, NetworkPolicy)
+deployments/k8s/               # raw manifests (namespace, vLLM, SGLang, proxy)
+docs/                          # architecture, routing, prefix caching, model servers
+scripts/                       # deploy + test scripts
+```
 
 ## Monitoring
 
-### Prometheus Metrics
+The Helm chart ships a ServiceMonitor, and the `/metrics` endpoint exposes:
 
-The proxy exposes metrics at `/metrics`:
+- `inference_proxy_requests_total{model,status}`
+- `inference_proxy_request_duration_seconds{model}`
+- `inference_proxy_active_requests{model}`
 
-- `litellm_requests_total{model, status}` - Total requests
-- `litellm_request_duration_seconds{model}` - Request duration
-- `litellm_active_requests{model}` - Active requests
+## Development
 
-### ServiceMonitor
-
-Create a Prometheus ServiceMonitor in the `monitoring` namespace:
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: litellm-proxy
-  namespace: monitoring
-spec:
-  endpoints:
-    - port: metrics
-      path: /metrics
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: litellm-backend
-```
-
-### Grafana Dashboard
-
-Import the dashboard from `deployments/helm/litellm/dashboards/`.
-
-## Helm Values
-
-```yaml
-proxy:
-  replicas: 3
-  image:
-    repository: santura-dev/litellm-backend
-    tag: latest
-  resources:
-    limits:
-      cpu: "2"
-      memory: "4Gi"
-  autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 10
-    targetCPUUtilization: 70
-
-monitoring:
-  enabled: true
-  serviceMonitor:
-    enabled: true
-    namespace: monitoring
-
-networkPolicy:
-  enabled: true
-```
-
-## Dependencies
-
-```go
-require (
-    github.com/go-chi/chi/v5 v5.0.10      # HTTP routing
-    github.com/go-chi/cors v1.2.2         # CORS middleware
-    github.com/prometheus/client_golang v1.19.0  # Metrics
-    gopkg.in/yaml.v3 v3.0.1               # Config parsing
-)
+```bash
+make test      # go test ./...
+make lint      # golangci-lint
+make build     # bin/inference-proxy
 ```
 
 ## License
 
-Part of santura-dev inference stack.
+MIT
